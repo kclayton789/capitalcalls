@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capital Call Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface-2: #f9f8f5;
+    --border: rgba(11,11,11,0.10);
+    --border-strong: rgba(11,11,11,0.18);
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --accent: #1a3a6b;
+    --accent-light: #e8edf5;
+    --accent-mid: #3266ad;
+    --success: #0ca30c;
+    --success-bg: #eaf3de;
+    --warning: #fab219;
+    --warning-bg: #faeeda;
+    --danger: #d03b3b;
+    --danger-bg: #fcebeb;
+    --radius: 8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--accent);
+    color: white;
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-logo {
+    width: 28px; height: 28px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; color: white;
+  }
+  .header h1 { font-size: 15px; font-weight: 500; letter-spacing: 0.01em; }
+  .header-period { font-size: 12px; color: rgba(255,255,255,0.6); }
+
+  /* ── Layout ── */
+  .main { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+  /* ── Upload zone ── */
+  .upload-section {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  .upload-section h2 { font-size: 13px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--surface-2);
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent-mid);
+    background: var(--accent-light);
+  }
+  .drop-zone-icon { font-size: 32px; margin-bottom: 0.75rem; color: var(--text-muted); }
+  .drop-zone p { color: var(--text-secondary); font-size: 14px; }
+  .drop-zone span { color: var(--accent-mid); font-weight: 500; cursor: pointer; }
+  .drop-zone small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; }
+  #file-input { display: none; }
+
+  .file-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
+  .chip {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--accent-light); color: var(--accent);
+    border: 0.5px solid rgba(50,102,173,0.2);
+    border-radius: 20px; padding: 4px 10px;
+    font-size: 12px; font-weight: 500;
+  }
+  .chip-remove { cursor: pointer; color: var(--text-muted); font-size: 14px; line-height: 1; }
+  .chip-remove:hover { color: var(--danger); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 0.5px solid var(--border-strong);
+    background: white; color: var(--text-primary);
+    transition: background 0.1s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary {
+    background: var(--accent); color: white;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #152f58; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .upload-actions { display: flex; gap: 8px; margin-top: 1rem; align-items: center; }
+
+  /* ── Processing state ── */
+  .processing-bar {
+    display: none;
+    background: var(--accent-light);
+    border: 0.5px solid rgba(50,102,173,0.2);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-top: 1rem;
+    font-size: 13px;
+    color: var(--accent);
+    align-items: center;
+    gap: 10px;
+  }
+  .processing-bar.show { display: flex; }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(50,102,173,0.3);
+    border-top-color: var(--accent-mid);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Dashboard ── */
+  #dashboard { display: none; }
+  #dashboard.show { display: block; }
+
+  .section-title {
+    font-size: 11px; font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── KPI row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
+  .kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .kpi-value { font-size: 22px; font-weight: 500; color: var(--text-primary); }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .kpi-card.accent-card { border-left: 3px solid var(--accent-mid); }
+  .kpi-card.success-card { border-left: 3px solid var(--success); }
+  .kpi-card.warning-card { border-left: 3px solid var(--warning); }
+
+  /* ── Two-col layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .card h3 { font-size: 13px; font-weight: 500; margin-bottom: 1rem; color: var(--text-secondary); }
+
+  /* ── Fund table ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem 0;
+    margin-bottom: 0.75rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--surface-2);
+    border-bottom: 0.5px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th:not(:first-child) { text-align: right; }
+  tbody tr { border-bottom: 0.5px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-2); }
+  td { padding: 10px 12px; color: var(--text-primary); vertical-align: middle; }
+  td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+  .fund-name { font-weight: 500; }
+  .fund-sub { font-size: 11px; color: var(--text-muted); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 500;
+  }
+  .badge-call { background: var(--accent-light); color: var(--accent); }
+  .badge-dist { background: var(--success-bg); color: #0a7a09; }
+  .badge-net { background: var(--warning-bg); color: #7a5800; }
+
+  /* ── Breakdown bars ── */
+  .breakdown-row { display: flex; flex-direction: column; gap: 10px; }
+  .breakdown-item {}
+  .breakdown-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .breakdown-label span:first-child { color: var(--text-secondary); }
+  .breakdown-label span:last-child { font-weight: 500; }
+  .breakdown-track { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .breakdown-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .fill-inv { background: #2a78d6; }
+  .fill-follow { background: #1baf7a; }
+  .fill-fees { background: #eda100; }
+
+  /* ── Historical table ── */
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .hist-table th {
+    padding: 8px 0; text-align: right;
+    font-size: 11px; font-weight: 500;
+    color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .hist-table th:first-child { text-align: left; }
+  .hist-table td { padding: 10px 0; text-align: right; border-bottom: 0.5px solid var(--border); font-variant-numeric: tabular-nums; }
+  .hist-table td:first-child { text-align: left; color: var(--text-secondary); }
+  .hist-table tr:last-child td { border-bottom: none; font-weight: 500; }
+
+  /* ── Empty / error ── */
+  .empty { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 13px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    background: #1a1a18; color: white;
+    padding: 10px 16px; border-radius: var(--radius);
+    font-size: 13px; z-index: 999;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .notice-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent-light); color: var(--accent);
+    font-size: 11px; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">CC</div>
+    <h1>Capital Call Tracker</h1>
+  </div>
+  <span class="header-period" id="header-period"></span>
+</div>
+
+<div class="main">
+
+  <!-- Upload -->
+  <div class="upload-section">
+    <h2>Upload notices</h2>
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-zone-icon">&#128196;</div>
+      <p>Drop capital call PDFs here, or <span onclick="document.getElementById('file-input').click()">browse files</span></p>
+      <small>PDF files only &mdash; upload multiple at once</small>
+    </div>
+    <input type="file" id="file-input" accept=".pdf" multiple>
+
+    <div class="file-chips" id="file-chips"></div>
+
+    <div class="upload-actions">
+      <button class="btn btn-primary" id="process-btn" disabled onclick="processAll()">
+        Process notices &#8250;
+      </button>
+      <button class="btn" id="reset-btn" onclick="resetAll()" style="display:none">
+        Clear &amp; start over
+      </button>
+    </div>
+
+    <div class="processing-bar" id="processing-bar">
+      <div class="spinner"></div>
+      <span id="processing-text">Reading files...</span>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+
+    <!-- KPI row -->
+    <div class="section-title">This week</div>
+    <div class="kpi-row" id="kpi-row"></div>
+
+    <!-- Chart + breakdown -->
+    <div class="two-col">
+      <div class="card">
+        <h3>Capital called by fund</h3>
+        <div style="position:relative;height:220px;">
+          <canvas id="fund-chart" role="img" aria-label="Bar chart of capital called by fund"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Breakdown by use</h3>
+        <div class="breakdown-row" id="breakdown-row"></div>
+      </div>
+    </div>
+
+    <!-- Fund detail table -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="section-title" style="margin:0">Fund detail</div>
+        <span class="notice-count" id="notice-count">0</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Fund</th>
+            <th>Type</th>
+            <th>Notice date</th>
+            <th>Due date</th>
+            <th>Amount due</th>
+            <th>Total commitments</th>
+            <th>GP commitments</th>
+            <th>GP % of fund</th>
+            <th>Unfunded balance</th>
+          </tr>
+        </thead>
+        <tbody id="fund-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Historical -->
+    <div class="card" style="margin-bottom:1.5rem">
+      <h3>Historical tracking</h3>
+      <table class="hist-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>YTD</th>
+            <th>Trailing 12 months</th>
+          </tr>
+        </thead>
+        <tbody id="hist-tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let files = [];
+let notices = [];
+let chartInstance = null;
+const HISTORY_KEY = 'cc_history_v1';
+
+// ── File handling ──────────────────────────────────────────────────────────
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  addFiles([...e.dataTransfer.files].filter(f => f.type === 'application/pdf'));
+});
+fileInput.addEventListener('change', () => addFiles([...fileInput.files]));
+
+function addFiles(newFiles) {
+  newFiles.forEach(f => { if (!files.find(x => x.name === f.name)) files.push(f); });
+  renderChips();
+}
+
+function renderChips() {
+  const el = document.getElementById('file-chips');
+  el.innerHTML = files.map((f, i) => `
+    <div class="chip">
+      &#128196; ${f.name}
+      <span class="chip-remove" onclick="removeFile(${i})">&#215;</span>
+    </div>`).join('');
+  document.getElementById('process-btn').disabled = files.length === 0;
+}
+
+function removeFile(i) {
+  files.splice(i, 1);
+  renderChips();
+}
+
+// ── PDF text extraction ────────────────────────────────────────────────────
+
+async function extractPdfText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(s => s.str).join(' ') + '\n';
+  }
+  return text;
+}
+
+// ── Parser ────────────────────────────────────────────────────────────────
+
+function grab(text, patterns) {
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m && m[1]) return m[1].trim();
+  }
+  return null;
+}
+
+function parseMoney(s) {
+  if (!s) return null;
+  const n = parseFloat(s.replace(/[$,\s]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+function parsePct(s) {
+  if (!s) return null;
+  const n = parseFloat(s.replace(/[%\s]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+function parseNotice(text, filename) {
+  const t = text.replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ');
+
+  const fundName = grab(t, [
+    /fund\s+name[:\s]+([^\n]{3,60})/i,
+    /name\s+of\s+(?:fund|partnership)[:\s]+([^\n]{3,60})/i,
+    /partnership\s+name[:\s]+([^\n]{3,60})/i,
+    /([A-Z][A-Za-z\s&,.]+(?:Fund|Partners|Capital|LP|L\.P\.))\s/,
+  ]) || filename.replace(/\.pdf$/i,'').replace(/[-_]/g,' ');
+
+  const noticeDate = grab(t, [
+    /notice\s+date[:\s]+([^\n]{4,30})/i,
+    /call\s+date[:\s]+([^\n]{4,30})/i,
+    /date\s+of\s+(?:notice|call)[:\s]+([^\n]{4,30})/i,
+    /dated[:\s]+([A-Z][a-z]+\.?\s+\d{1,2},?\s*\d{4})/i,
+    /as\s+of[:\s]+([A-Z][a-z]+\.?\s+\d{1,2},?\s*\d{4})/i,
+  ]);
+
+  const dueDate = grab(t, [
+    /due\s+date[:\s]+([^\n]{4,30})/i,
+    /payment\s+due[:\s]+([^\n]{4,30})/i,
+    /payable\s+(?:by|on)[:\s]+([^\n]{4,30})/i,
+    /must\s+be\s+(?:received|paid)[^\n]{0,20}by[:\s]+([^\n]{4,30})/i,
+    /wire\s+(?:transfer\s+)?(?:by|no\s+later\s+than)[:\s]+([^\n]{4,30})/i,
+  ]);
+
+  const typeRaw = grab(t, [
+    /(capital\s+call|net\s+call|distribution|return\s+of\s+capital)/i,
+  ]);
+  const callType = typeRaw
+    ? typeRaw.replace(/\b\w/g, c => c.toUpperCase())
+    : 'Capital Call';
+
+  const amountDue = parseMoney(grab(t, [
+    /amount\s+due[:\s]+([\$\d,\.]+)/i,
+    /capital\s+call\s+amount[:\s]+([\$\d,\.]+)/i,
+    /(?:your|lp)\s+(?:capital\s+)?contribution[:\s]+([\$\d,\.]+)/i,
+    /amount\s+of\s+(?:this\s+)?(?:call|notice)[:\s]+([\$\d,\.]+)/i,
+    /current\s+(?:call|notice|draw)[:\s]+([\$\d,\.]+)/i,
+    /draw(?:down)?\s+amount[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const totalCommitments = parseMoney(grab(t, [
+    /total\s+(?:fund\s+)?commitments?[:\s]+([\$\d,\.]+)/i,
+    /aggregate\s+commitments?[:\s]+([\$\d,\.]+)/i,
+    /total\s+capital\s+commitments?[:\s]+([\$\d,\.]+)/i,
+    /fund\s+size[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const gpCommitments = parseMoney(grab(t, [
+    /gp\s+commitments?[:\s]+([\$\d,\.]+)/i,
+    /general\s+partner(?:'s)?\s+commitments?[:\s]+([\$\d,\.]+)/i,
+    /gp\s+contribution[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const gpPctFund = parsePct(grab(t, [
+    /gp[^%\n]{0,40}as\s+a\s+percent(?:age)?\s+of\s+(?:fund\s+)?commitments?[:\s]+([\d\.]+\s*%?)/i,
+    /gp[^%\n]{0,20}%\s+of\s+(?:total\s+)?fund[:\s]+([\d\.]+\s*%?)/i,
+  ]));
+
+  const gpPctNotice = parsePct(grab(t, [
+    /gp[^%\n]{0,40}as\s+a\s+percent(?:age)?\s+of\s+(?:current\s+)?notice[:\s]+([\d\.]+\s*%?)/i,
+    /gp[^%\n]{0,20}%\s+of\s+(?:this\s+)?(?:call|notice)[:\s]+([\d\.]+\s*%?)/i,
+  ]));
+
+  const unfundedBalance = parseMoney(grab(t, [
+    /unfunded\s+(?:balance|commitment|amount)[:\s]+([\$\d,\.]+)/i,
+    /remaining\s+(?:unfunded\s+)?commitment[:\s]+([\$\d,\.]+)/i,
+    /undrawn\s+commitment[:\s]+([\$\d,\.]+)/i,
+    /remaining\s+capital\s+commitment[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const totalDistributions = parseMoney(grab(t, [
+    /total\s+distributions?[:\s]+([\$\d,\.]+)/i,
+    /distributions?\s+(?:to\s+)?(?:lps?|partners?)[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const newInvestments = parseMoney(grab(t, [
+    /new\s+investments?[:\s]+([\$\d,\.]+)/i,
+    /new\s+portfolio\s+(?:company|investment)[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const followOns = parseMoney(grab(t, [
+    /follow[\-\s]?ons?[:\s]+([\$\d,\.]+)/i,
+    /follow[\-\s]?on\s+investments?[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  const feesExpenses = parseMoney(grab(t, [
+    /(?:management\s+)?fees?\s+(?:&|and)\s+expenses?[:\s]+([\$\d,\.]+)/i,
+    /management\s+fee[:\s]+([\$\d,\.]+)/i,
+    /fund\s+expenses?[:\s]+([\$\d,\.]+)/i,
+  ]));
+
+  return {
+    fund_name: fundName,
+    notice_date: noticeDate,
+    due_date: dueDate,
+    type: callType,
+    amount_due: amountDue,
+    total_commitments: totalCommitments,
+    gp_commitments: gpCommitments,
+    gp_pct_fund: gpPctFund,
+    gp_pct_notice: gpPctNotice,
+    unfunded_balance: unfundedBalance,
+    total_distributions: totalDistributions,
+    breakdown: { new_investments: newInvestments, follow_ons: followOns, fees_expenses: feesExpenses },
+    _filename: filename,
+  };
+}
+
+// ── Process ───────────────────────────────────────────────────────────────
+
+async function processAll() {
+  if (!files.length) return;
+  notices = [];
+
+  document.getElementById('process-btn').disabled = true;
+  document.getElementById('processing-bar').classList.add('show');
+  document.getElementById('dashboard').classList.remove('show');
+
+  for (let i = 0; i < files.length; i++) {
+    setProcessingText(`Reading ${files[i].name} (${i+1}/${files.length})...`);
+    try {
+      const text = await extractPdfText(files[i]);
+      const notice = parseNotice(text, files[i].name);
+      notices.push(notice);
+    } catch(e) {
+      showToast(`Could not read ${files[i].name}`);
+    }
+  }
+
+  setProcessingText('Building summary...');
+  saveHistory(notices);
+  renderDashboard();
+
+  document.getElementById('processing-bar').classList.remove('show');
+  document.getElementById('reset-btn').style.display = '';
+  document.getElementById('dashboard').classList.add('show');
+  showToast(`Processed ${notices.length} notice${notices.length !== 1 ? 's' : ''}`);
+}
+
+function setProcessingText(t) {
+  document.getElementById('processing-text').textContent = t;
+}
+
+function resetAll() {
+  files = [];
+  notices = [];
+  renderChips();
+  document.getElementById('dashboard').classList.remove('show');
+  document.getElementById('reset-btn').style.display = 'none';
+  document.getElementById('process-btn').disabled = true;
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveHistory(newNotices) {
+  const hist = loadHistory();
+  const now = new Date().toISOString();
+  newNotices.forEach(n => {
+    hist.push({ date: now, fund: n.fund_name, called: n.amount_due || 0, distributed: n.total_distributions || 0 });
+  });
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(hist)); } catch {}
+}
+
+function computeHistoricals() {
+  const hist = loadHistory();
+  const now = new Date();
+  const ytdStart = new Date(now.getFullYear(), 0, 1);
+  const t12Start = new Date(now - 365*24*60*60*1000);
+  let cYTD=0,dYTD=0,cT12=0,dT12=0;
+  hist.forEach(e => {
+    const d = new Date(e.date);
+    if (d >= ytdStart) { cYTD += e.called; dYTD += e.distributed; }
+    if (d >= t12Start) { cT12 += e.called; dT12 += e.distributed; }
+  });
+  return { cYTD, dYTD, netYTD: cYTD-dYTD, cT12, dT12, netT12: cT12-dT12 };
+}
+
+// ── Formatting ─────────────────────────────────────────────────────────────
+
+function fmtM(n) {
+  if (n == null) return 'N/A';
+  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + Math.round(n).toLocaleString();
+  return '$' + Math.round(n);
+}
+
+function fmtPct(n) {
+  if (n == null) return 'N/A';
+  return n.toFixed(2) + '%';
+}
+
+function typeBadge(t) {
+  const lower = (t||'').toLowerCase();
+  if (lower.includes('dist')) return `<span class="badge badge-dist">${t}</span>`;
+  if (lower.includes('net')) return `<span class="badge badge-net">${t}</span>`;
+  return `<span class="badge badge-call">${t}</span>`;
+}
+
+// ── Render dashboard ──────────────────────────────────────────────────────
+
+function renderDashboard() {
+  const totalCalled = notices.reduce((s,n) => s + (n.amount_due||0), 0);
+  const totalDist = notices.reduce((s,n) => s + (n.total_distributions||0), 0);
+  const netFlow = totalCalled - totalDist;
+  const newInv = notices.reduce((s,n) => s + (n.breakdown.new_investments||0), 0);
+  const followOns = notices.reduce((s,n) => s + (n.breakdown.follow_ons||0), 0);
+  const fees = notices.reduce((s,n) => s + (n.breakdown.fees_expenses||0), 0);
+
+  // Period label
+  const now = new Date();
+  document.getElementById('header-period').textContent =
+    now.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+
+  // KPIs
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi-card accent-card">
+      <div class="kpi-label">Capital called</div>
+      <div class="kpi-value">${fmtM(totalCalled)}</div>
+      <div class="kpi-sub">${notices.length} notice${notices.length!==1?'s':''} this week</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Distributions</div>
+      <div class="kpi-value">${fmtM(totalDist)}</div>
+      <div class="kpi-sub">returned to LP</div>
+    </div>
+    <div class="kpi-card ${netFlow >= 0 ? 'accent-card' : 'success-card'}">
+      <div class="kpi-label">Net flow</div>
+      <div class="kpi-value">${fmtM(netFlow)}</div>
+      <div class="kpi-sub">called minus distributed</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">New investments</div>
+      <div class="kpi-value">${fmtM(newInv)}</div>
+      <div class="kpi-sub">from breakdown</div>
+    </div>
+    <div class="kpi-card warning-card">
+      <div class="kpi-label">Fees &amp; expenses</div>
+      <div class="kpi-value">${fmtM(fees)}</div>
+      <div class="kpi-sub">management + fund costs</div>
+    </div>
+  `;
+
+  // Bar chart
+  if (chartInstance) chartInstance.destroy();
+  const labels = notices.map(n => n.fund_name || n._filename);
+  const data = notices.map(n => Math.round(n.amount_due || 0));
+  chartInstance = new Chart(document.getElementById('fund-chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Amount called',
+        data,
+        backgroundColor: '#2a78d6',
+        borderRadius: 4,
+        borderSkipped: 'bottom',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#898781', font: { size: 11 } } },
+        y: {
+          grid: { color: '#e1e0d9', lineWidth: 1 },
+          ticks: {
+            color: '#898781', font: { size: 11 },
+            callback: v => v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : '$' + v.toLocaleString()
+          }
+        }
+      }
+    }
+  });
+
+  // Breakdown bars
+  const total = newInv + followOns + fees || 1;
+  document.getElementById('breakdown-row').innerHTML = [
+    { label: 'New investments', val: newInv, cls: 'fill-inv' },
+    { label: 'Follow-ons', val: followOns, cls: 'fill-follow' },
+    { label: 'Fees & expenses', val: fees, cls: 'fill-fees' },
+  ].map(row => `
+    <div class="breakdown-item">
+      <div class="breakdown-label">
+        <span>${row.label}</span>
+        <span>${fmtM(row.val)}</span>
+      </div>
+      <div class="breakdown-track">
+        <div class="breakdown-fill ${row.cls}" style="width:${Math.round((row.val/total)*100)}%"></div>
+      </div>
+    </div>
+  `).join('');
+
+  // Fund table
+  document.getElementById('notice-count').textContent = notices.length;
+  document.getElementById('fund-tbody').innerHTML = notices.length === 0
+    ? `<tr><td colspan="9" class="empty">No notices parsed.</td></tr>`
+    : notices.map(n => `
+      <tr>
+        <td>
+          <div class="fund-name">${n.fund_name || '—'}</div>
+          <div class="fund-sub">${n._filename}</div>
+        </td>
+        <td>${typeBadge(n.type)}</td>
+        <td>${n.notice_date || '—'}</td>
+        <td>${n.due_date || '—'}</td>
+        <td>${fmtM(n.amount_due)}</td>
+        <td>${fmtM(n.total_commitments)}</td>
+        <td>${fmtM(n.gp_commitments)}</td>
+        <td>${fmtPct(n.gp_pct_fund)}</td>
+        <td>${fmtM(n.unfunded_balance)}</td>
+      </tr>`).join('');
+
+  // Historical
+  const h = computeHistoricals();
+  document.getElementById('hist-tbody').innerHTML = `
+    <tr>
+      <td>Total capital called</td>
+      <td>${fmtM(h.cYTD)}</td>
+      <td>${fmtM(h.cT12)}</td>
+    </tr>
+    <tr>
+      <td>Total distributed</td>
+      <td>${fmtM(h.dYTD)}</td>
+      <td>${fmtM(h.dT12)}</td>
+    </tr>
+    <tr>
+      <td>Net flow</td>
+      <td>${fmtM(h.netYTD)}</td>
+      <td>${fmtM(h.netT12)}</td>
+    </tr>
+  `;
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
